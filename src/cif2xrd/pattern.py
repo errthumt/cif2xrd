@@ -111,7 +111,8 @@ class simPattern:
             pattern_params = pUtl.condense_pattern_parameters(cleaned_params)
         else:
             pattern_params = pUtl.clean_parameters(kwargs, defaults=pUtl.default_params["pattern_condensed"])
-
+            
+        self.params = pattern_params
         self.structure = Structure.from_file(cif_path)
         self.Z = _compute_Z(self.structure, cif_path)
         self.molWeight = float(self.structure.composition.weight / self.Z)

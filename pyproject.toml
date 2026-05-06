@@ -11,7 +11,16 @@ requires-python = ">=3.9"
 authors = [
     { name = "Travis Errthum" }
 ]
-
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "pymatgen"
 ]
+
+[project.urls]
+Homepage = "https://github.com/errthumt/cif2xrd"
+Issues = "https://github.com/errthumt/cif2xrd/issues"

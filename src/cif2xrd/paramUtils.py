@@ -1,24 +1,28 @@
-default_params = {
-    "pattern":{
-        "doublet": True,
-        "wavelength1": 1.5406,
-        "weight1":1.0,
-        "wavelength2":1.54439,
-        "weight2":0.5,
-        "start_2th":3.0,
-        "end_2th":90.0,
-        "step_2th":0.2,
-        "U":0.0,
-        "V":0.0,
-        "W":0.012,
-        "X":0.0,
-        "Y":0.0,
-        "axial_S":0.015
-    }
-}
-
+def parse_params(s):
+    """
+    Converts a string of comma-separated key:value pairs into a dictionary.
+    For example, the string "key1:val1, key2:val2" would be converted to {"key1": "val1", "key2": "val2"}.
+    If any item in the string cannot be parsed as a key:value pair, it will be skipped and an error message will be printed.
+    
+    Useful for passing dict args as a single argument string from other languages. Recommended to use with clean_parameters for soft type forcing.
+    """
+    items = s.split(',')
+    out = {}
+    for item in items:
+        try:
+            key, val = item.split(':')
+            out[key.strip()] = val.strip()
+        except:
+            print(f"Error parsing option '{item}'. Excluding from parsed parameters")
+    return out 
 
 def clean_parameters(params, defaults={}):
+    """
+    Cleans a dictionary passed as params and returns a dictionary containing only keys found in defaults.
+    Coerces types to match defaults. Keys found in defaults but not params will be assigned default values.
+    Type coersion not supported for complex structures like lists or tuples.
+    For an example of how lists or tuples can be unpacked from string, see condense_pattern_parameters()
+    """
     new_params = {}
     for key in defaults:
         def_val = defaults[key]
@@ -49,6 +53,30 @@ def clean_parameters(params, defaults={}):
 
 
 def condense_pattern_parameters(cleaned_params):
+    """
+    Condenses parameters for generating patterns from a dict of key:single_value pairs
+    into a dict of key:(value,value) expected by pattern constructors.
+    Dicts constructed from clean_parameters() cannot contain lists or tuples.
+    This function helps generate pattern parameters from clean_parameters() output.
+    {doublet:bool}                           -> determines how wavelength/weight fields collapse
+        doublet=True                         -> {fe_wavelengths:[wavelength1, wavelength2],
+                                                fe_weights:[weight1, weight2]}
+        doublet=False                        -> {fe_wavelengths:[wavelength1],
+                                                fe_weights:[1.0]}
+
+    {wavelength1:val1, wavelength2:val2}     -> contributes to {fe_wavelengths:[...]}
+        if doublet=True                      -> [val1, val2]
+        if doublet=False                     -> [val1]
+
+    {weight1:val1, weight2:val2}             -> contributes to {fe_weights:[...]}
+        if doublet=True                      -> [val1, val2]
+        if doublet=False                     -> [1.0]
+
+    {start_2th:start, end_2th:end}           -> {two_theta_range:(start, end)}
+
+    {step_2th:val}                           -> {step:val}
+        step_2th -> step conversion included for Origin C compatibility        
+    """
     cif_params = cleaned_params.copy()
     doublet = cif_params.pop("doublet")
     wavelength1 = cif_params.pop("wavelength1")
@@ -72,6 +100,30 @@ def condense_pattern_parameters(cleaned_params):
     return cif_params
 
 def expand_pattern_params(condensed_params):
+    """
+    Reverse of condense_pattern_parameters(). See that docstring for use case.
+    {fe_wavelengths:[val1] OR [val1,val2]}   -> controls {doublet:bool}
+        [val1,val2]                          -> {doublet:True,
+                                                wavelength1:val1,
+                                                wavelength2:val2}
+        [val1]                               -> {doublet:False,
+                                                wavelength1:val1,
+                                                weight1:1.0,
+                                                wavelength2:1.0,
+                                                weight2:1.0}
+
+    {fe_weights:[w1,w2] OR [w1]}             -> expands into:
+        [w1,w2]                              -> {weight1:w1, weight2:w2}
+        [w1]                                 -> {weight1:1.0, weight2:1.0}
+                                            (single‑line mode ignores passed weight)
+
+    {two_theta_range:(start,end)}            -> {start_2th:start,
+                                                end_2th:end}
+
+    {step:val}                               -> {step_2th:val}
+        step -> step_2th conversion included for Origin C compatibility
+
+    """
     new_params = clean_parameters(condensed_params, defaults=default_params["pattern_condensed"])
     wavelengths = new_params.pop("fe_wavelengths")
     weights = new_params.pop("fe_weights")
@@ -104,7 +156,7 @@ def expand_pattern_params(condensed_params):
     return clean_parameters(new_params, defaults=default_params["pattern_expanded"])
 
 
-
+# default pattern parameters simulate CuKa radiation with doublet splitting on a Rigaku Miniflex 600
 default_params = {
     "pattern_expanded":{
         "doublet": True,

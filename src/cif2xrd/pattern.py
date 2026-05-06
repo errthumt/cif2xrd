@@ -194,3 +194,7 @@ class simPattern:
                 intensity += wt * I0 * pv * asym
 
         return two_theta, intensity
+
+    def save_pattern(self, filepath):
+        data = np.column_stack((self.two_theta, self.intensity))
+        np.savetxt(filepath, data, header="TwoTheta Intensity", comments="")

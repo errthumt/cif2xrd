@@ -8,13 +8,9 @@ warnings.filterwarnings(
     module="matplotlib.projections"
 )
 
-import os
-import sys
-
 import numpy as np
 from pymatgen.io.cif import CifParser
 from pymatgen.core import Structure
-from pymatgen.core.periodic_table import Element
 from pymatgen.analysis.diffraction.xrd import XRDCalculator
 
 import cif2xrd.paramUtils as pUtl

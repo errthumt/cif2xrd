@@ -1,5 +1,4 @@
 import originpro as op
-import sys
 
 # Column formulas require letters instead of column indices
 def _col_index_to_letter(idx):

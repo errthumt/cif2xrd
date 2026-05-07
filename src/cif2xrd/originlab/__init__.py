@@ -6,7 +6,7 @@ except Exception:
         "This submodule cannot be imported in a normal Python interpreter."
     )
 
-from cif2xrd.originlab._cifUtils import import_cifs_from_xf, select_cifs_and_import
+from cif2xrd.originlab._cifUtils import import_cifs_from_xf, select_cifs_and_import, add_phase_fractions
 
 from cif2xrd.originlab._rasUtils import import_ras_from_xf, select_ras_and_import
 

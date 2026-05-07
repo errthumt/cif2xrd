@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cif2xrd"
-version = "0.1.5"
+version = "1.0.0"
 description = "A python package for simulating X-ray powder diffraction patterns from CIF files. Adds peak broadening and phase fraction scaling to existing pymatgen features."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ dependencies = [
     "pymatgen",
     "numpy"
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/errthumt/cif2xrd"

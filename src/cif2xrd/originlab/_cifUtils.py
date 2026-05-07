@@ -113,7 +113,7 @@ def _pick_cifs(mode):
             if f.strip()
         ]
     else:
-        return []
+        return None
 
 #  Major import function
 def _import_selected_cifs(file_list, normalize, book_name, pattern_params):
@@ -192,6 +192,9 @@ def select_cifs_and_import(params):
     book_name = origin_params["book_name"]
 
     file_list = _pick_cifs(file_mode)
+
+    if file_list is None:
+        return
 
     _import_selected_cifs(file_list, normalize, book_name, pattern_params)
 

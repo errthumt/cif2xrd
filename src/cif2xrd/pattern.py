@@ -19,9 +19,29 @@ from pymatgen.analysis.diffraction.xrd import XRDCalculator
 
 import cif2xrd.paramUtils as pUtl
 
-
-#  TCH pseudo-approximation of Voight peak shape
 def _tch_pseudo_voigt(two_theta, t0, H_G, H_L):
+    """
+    Compute the Thompson–Cox–Hastings (TCH) pseudo-Voigt peak profile.
+
+    This function evaluates a normalized pseudo-Voigt line shape centered at
+    `t0`, using Gaussian (H_G) and Lorentzian (H_L) FWHM components combined
+    through the TCH mixing approximation.
+
+    Args:
+        two_theta (np.ndarray):
+            Array of 2θ values at which the peak shape is evaluated.
+        t0 (float):
+            Peak center position in degrees 2θ.
+        H_G (float):
+            Gaussian FWHM component from the Caglioti equation.
+        H_L (float):
+            Lorentzian FWHM component from the Caglioti equation.
+
+    Returns:
+        np.ndarray:
+            Normalized pseudo-Voigt profile evaluated at `two_theta`.
+    """
+
     H = (H_G**5 + 2.69269*H_G**4*H_L + 2.42843*H_G**3*H_L**2 +
          4.47163*H_G**2*H_L**3 + 0.07842*H_G*H_L**4 + H_L**5)**0.2
 
@@ -38,19 +58,57 @@ def _tch_pseudo_voigt(two_theta, t0, H_G, H_L):
     pv /= pv.sum() + 1e-12
     return pv
 
-#  Gaussian approximation of Finger-Cox-Jephcoat axial divergence asymmetry (peak tailing)
 def _fcj_asymmetry(two_theta, t0, H, S=0.015):
+    """
+    Compute the Finger–Cox–Jephcoat (FCJ) axial divergence asymmetry factor.
+
+    This is the Gaussian approximation to the FCJ model, which introduces
+    low-angle peak tailing due to axial divergence in Bragg–Brentano geometry.
+
+    Args:
+        two_theta (np.ndarray):
+            Array of 2θ values at which the asymmetry factor is evaluated.
+        t0 (float):
+            Symmetric peak position (before asymmetry) in degrees 2θ.
+        H (float):
+            Effective FWHM of the peak (typically the Gaussian component).
+        S (float, optional):
+            Axial divergence parameter. Defaults to 0.015.
+
+    Returns:
+        np.ndarray:
+            Multiplicative asymmetry factor applied to the peak shape.
+    """
+
     delta = S * np.tan(np.radians(t0/2))
     shift = delta * (two_theta - t0)
     return np.exp(-shift**2 / (2*H**2))
 
 def _compute_Z(structure=None, cif_path=None):
     """
-    Compute Z (formula units per unit cell) using the most reliable source:
-    1. If cif_path is provided and CIF contains _cell_formula_units_Z, use it.
-    2. Otherwise fall back to computing Z from the Structure object.
-    """
+    Determine the number of formula units per unit cell (Z).
 
+    The function attempts to extract Z directly from the CIF file using the
+    `_cell_formula_units_Z` field or common variants. If no such field is
+    present, Z is computed from the pymatgen Structure object as:
+
+        Z = (number of atoms in unit cell) / (atoms in reduced formula)
+
+    Args:
+        structure (pymatgen.core.Structure, optional):
+            Structure object already loaded from a CIF. Required if
+            `cif_path` is not provided.
+        cif_path (str, optional):
+            Path to the CIF file. Used to extract Z directly if possible.
+
+    Returns:
+        float:
+            Formula units per unit cell.
+
+    Raises:
+        ValueError:
+            If neither `structure` nor `cif_path` is provided.
+    """
     # --- Case 1: Try reading Z directly from CIF ---
     if cif_path is not None:
         parser = CifParser(cif_path)
@@ -87,38 +145,69 @@ def _compute_Z(structure=None, cif_path=None):
 
     return full_atoms / formula_atoms
 
-default_pattern_params = {
-    "doublet": True,
-    "wavelength1": 1.5406,
-    "weight1":1.0,
-    "wavelength2":1.54439,
-    "weight2":0.5,
-    "start_2th":3.0,
-    "end_2th":90.0,
-    "step_2th":0.2,
-    "U":0.0,
-    "V":0.0,
-    "W":0.012,
-    "X":0.0,
-    "Y":0.0,
-    "axial_S":0.015
-}
-
 class simPattern:
+    """
+    Simulates a powder XRD pattern from a CIF structure.
+
+    Attributes:
+        params (dict):
+            The parameter dictionary used to generate the pattern.
+        structure (pymatgen.core.Structure):
+            Crystal structure loaded from the CIF file.
+        Z (float):
+            Formula units per unit cell.
+        molWeight (float):
+            Molecular weight of a formula unit (amu).
+        cell_volume (float):
+            Unit cell volume (Å³).
+        two_theta (np.ndarray):
+            Array of simulated 2θ values.
+        intensity (np.ndarray):
+            Array of simulated intensities corresponding to `two_theta`.
+
+    Methods:
+        set_parameters(**kwargs):
+            Update simulation parameters and recompute the pattern.
+        save_pattern(filepath):
+            Save the simulated pattern to a text file.
+    """
     def __init__(self, cif_path, param_type="condensed", **kwargs):
-        if param_type == "expanded":
-            cleaned_params = pUtl.clean_parameters(kwargs, defaults=pUtl.default_params["pattern_expanded"])
-            pattern_params = pUtl.condense_pattern_parameters(cleaned_params)
-        else:
-            pattern_params = pUtl.clean_parameters(kwargs, defaults=pUtl.default_params["pattern_condensed"])
-            
-        self.params = pattern_params
+        """
+        Initialize a simPattern object and compute the powder pattern.
+
+        Args:
+            cif_path (str):
+                Path to the CIF file containing the crystal structure.
+            param_type ({"condensed", "expanded"}):
+                Format of the parameters supplied in `kwargs`.
+                - "condensed": expects fe_wavelengths, fe_weights, two_theta_range, step, U/V/W/X/Y, axial_S.
+                - "expanded": expects wavelength1/2, weight1/2, start_2th, end_2th, step_2th, U/V/W/X/Y, axial_S.
+                See `paramUtils.condense_pattern_parameters()` for details.
+            **kwargs:
+                Simulation parameters. Missing values are filled from defaults.
+                Type-coerced by `paramUtils.clean_parameters()`
+
+                Condensed parameters:
+                    fe_wavelengths (list[float]):
+                        One value for single-wavelength mode, two values for Kα doublet.
+                    fe_weights (list[float]):
+                        Relative weights; must match length of fe_wavelengths.
+                    two_theta_range (tuple[float, float]):
+                        (start_2θ, end_2θ) in degrees.
+                    step (float):
+                        Step size in degrees.
+                    U, V, W, X, Y, axial_S (float):
+                        Peak-shape parameters passed to the TCH pseudo-Voigt and FCJ asymmetry models.
+        """
+
         self.structure = Structure.from_file(cif_path)
         self.Z = _compute_Z(self.structure, cif_path)
         self.molWeight = float(self.structure.composition.weight / self.Z)
         self.cell_volume = self.structure.lattice.volume
 
-        self.two_theta, self.intensity = self._calculate_pattern(**pattern_params)
+        self.params = pUtl.default_params["pattern_condensed"]
+        self.set_parameters(param_type=param_type, **kwargs)
+
 
     def _calculate_pattern(self,
                  fe_wavelengths,
@@ -195,6 +284,20 @@ class simPattern:
                 intensity += wt * I0 * pv * asym
 
         return two_theta, intensity
+    
+    def _refresh_pattern(self):
+        self.two_theta, self.intensity = self._calculate_pattern(**self.params)
+
+    def set_parameters(self, param_type="condensed", **kwargs):
+        if param_type == "expanded":
+            current = pUtl.expand_pattern_params(self.params)
+            expanded = pUtl.clean_parameters(params=kwargs, defaults=current)
+            self.params = pUtl.condense_pattern_parameters(expanded)
+        else:
+            current = self.params
+            self.params = pUtl.clean_parameters(params=kwargs,defaults=current)
+
+        self._refresh_pattern()
 
     def save_pattern(self, filepath):
         data = np.column_stack((self.two_theta, self.intensity))

@@ -1,11 +1,23 @@
 def parse_params(s):
     """
-    Converts a string of comma-separated key:value pairs into a dictionary.
-    For example, the string "key1:val1, key2:val2" would be converted to {"key1": "val1", "key2": "val2"}.
-    If any item in the string cannot be parsed as a key:value pair, it will be skipped and an error message will be printed.
-    
-    Useful for passing dict args as a single argument string from other languages. Recommended to use with clean_parameters for soft type forcing.
+    Parse a comma‑separated string of key:value pairs into a dictionary.
+
+    The input string should contain items of the form:
+        "key1:val1, key2:val2, ..."
+
+    Items that cannot be parsed as key:value pairs are skipped with a warning.
+    This function is primarily intended for passing parameter dictionaries
+    through command‑line interfaces or external languages.
+
+    Args:
+        s (str):
+            Comma‑separated key:value string.
+
+    Returns:
+        dict:
+            Dictionary mapping keys to string values.
     """
+
     items = s.split(',')
     out = {}
     for item in items:
@@ -18,10 +30,24 @@ def parse_params(s):
 
 def clean_parameters(params, defaults={}):
     """
-    Cleans a dictionary passed as params and returns a dictionary containing only keys found in defaults.
-    Coerces types to match defaults. Keys found in defaults but not params will be assigned default values.
-    Type coersion not supported for complex structures like lists or tuples.
-    For an example of how lists or tuples can be unpacked from string, see condense_pattern_parameters()
+    Validate and type‑coerce a parameter dictionary against a defaults dictionary.
+
+    Each key in `defaults` is guaranteed to appear in the returned dictionary.
+    Missing values are filled from defaults. Values with mismatched types are
+    coerced to the default type when possible; otherwise the default value is used.
+
+    Boolean defaults accept string values ("true"/"false") and are converted
+    case‑insensitively. Complex types such as lists or tuples are not coerced.
+
+    Args:
+        params (dict):
+            User‑supplied parameter dictionary.
+        defaults (dict):
+            Dictionary defining expected keys and their default values.
+
+    Returns:
+        dict:
+            A fully populated parameter dictionary with validated and coerced types.
     """
     new_params = {}
     for key in defaults:
@@ -54,29 +80,35 @@ def clean_parameters(params, defaults={}):
 
 def condense_pattern_parameters(cleaned_params):
     """
-    Condenses parameters for generating patterns from a dict of key:single_value pairs
-    into a dict of key:(value,value) expected by pattern constructors.
-    Dicts constructed from clean_parameters() cannot contain lists or tuples.
-    This function helps generate pattern parameters from clean_parameters() output.
-    {doublet:bool}                           -> determines how wavelength/weight fields collapse
-        doublet=True                         -> {fe_wavelengths:[wavelength1, wavelength2],
-                                                fe_weights:[weight1, weight2]}
-        doublet=False                        -> {fe_wavelengths:[wavelength1],
-                                                fe_weights:[1.0]}
+    Convert expanded pattern parameters into the condensed parameter format.
 
-    {wavelength1:val1, wavelength2:val2}     -> contributes to {fe_wavelengths:[...]}
-        if doublet=True                      -> [val1, val2]
-        if doublet=False                     -> [val1]
+    Expanded parameters (wavelength1/2, weight1/2, start_2th, end_2th, step_2th)
+    are collapsed into the condensed representation:
 
-    {weight1:val1, weight2:val2}             -> contributes to {fe_weights:[...]}
-        if doublet=True                      -> [val1, val2]
-        if doublet=False                     -> [1.0]
+        fe_wavelengths : list of one or two wavelengths
+        fe_weights     : list of matching weights
+        two_theta_range: (start_2θ, end_2θ)
+        step           : step size in degrees
 
-    {start_2th:start, end_2th:end}           -> {two_theta_range:(start, end)}
+    The `doublet` flag determines whether one or two wavelengths are used.
+    This function is typically applied to the output of `clean_parameters()`.
 
-    {step_2th:val}                           -> {step:val}
-        step_2th -> step conversion included for Origin C compatibility        
+    Mapping summary:
+        doublet=True  → fe_wavelengths=[w1, w2], fe_weights=[wgt1, wgt2]
+        doublet=False → fe_wavelengths=[w1],      fe_weights=[1.0]
+
+        start_2th, end_2th → two_theta_range
+        step_2th           → step
+
+    Args:
+        cleaned_params (dict):
+            Parameter dictionary in expanded format.
+
+    Returns:
+        dict:
+            Condensed parameter dictionary suitable for pattern generation.
     """
+
     cif_params = cleaned_params.copy()
     doublet = cif_params.pop("doublet")
     wavelength1 = cif_params.pop("wavelength1")
@@ -101,28 +133,37 @@ def condense_pattern_parameters(cleaned_params):
 
 def expand_pattern_params(condensed_params):
     """
-    Reverse of condense_pattern_parameters(). See that docstring for use case.
-    {fe_wavelengths:[val1] OR [val1,val2]}   -> controls {doublet:bool}
-        [val1,val2]                          -> {doublet:True,
-                                                wavelength1:val1,
-                                                wavelength2:val2}
-        [val1]                               -> {doublet:False,
-                                                wavelength1:val1,
-                                                weight1:1.0,
-                                                wavelength2:1.0,
-                                                weight2:1.0}
+    Convert condensed pattern parameters back into the expanded parameter format.
 
-    {fe_weights:[w1,w2] OR [w1]}             -> expands into:
-        [w1,w2]                              -> {weight1:w1, weight2:w2}
-        [w1]                                 -> {weight1:1.0, weight2:1.0}
-                                            (single‑line mode ignores passed weight)
+    This reverses `condense_pattern_parameters()`. The length of
+    `fe_wavelengths` determines whether the expanded representation uses
+    single‑line or doublet mode.
 
-    {two_theta_range:(start,end)}            -> {start_2th:start,
-                                                end_2th:end}
+    Mapping summary:
+        fe_wavelengths=[w1, w2] → doublet=True,
+                                  wavelength1=w1, wavelength2=w2,
+                                  weight1=wgt1, weight2=wgt2
 
-    {step:val}                               -> {step_2th:val}
-        step -> step_2th conversion included for Origin C compatibility
+        fe_wavelengths=[w1]     → doublet=False,
+                                  wavelength1=w1,
+                                  weight1=1.0, weight2=1.0
 
+        two_theta_range → start_2th, end_2th
+        step            → step_2th
+
+    Args:
+        condensed_params (dict):
+            Parameter dictionary in condensed format.
+
+    Returns:
+        dict:
+            Expanded parameter dictionary validated against
+            `default_params["pattern_expanded"]`.
+
+    Raises:
+        ValueError:
+            If fe_wavelengths and fe_weights have mismatched lengths.
+            If two_theta_range is not a 2‑tuple.
     """
     new_params = clean_parameters(condensed_params, defaults=default_params["pattern_condensed"])
     wavelengths = new_params.pop("fe_wavelengths")
@@ -156,7 +197,26 @@ def expand_pattern_params(condensed_params):
     return clean_parameters(new_params, defaults=default_params["pattern_expanded"])
 
 
-# default pattern parameters simulate CuKa radiation with doublet splitting on a Rigaku Miniflex 600
+#: Default parameter sets for pattern simulation.
+#:
+#: This dictionary contains two parallel representations:
+#:
+#: - ``pattern_expanded``:
+#:     The full, human‑readable parameter set using explicit fields
+#:     (wavelength1/2, weight1/2, start_2th, end_2th, step_2th, U/V/W/X/Y, axial_S).
+#:     Suitable for UI input, CLI parsing, or user‑facing configuration.
+#:     These particular parameters were refined to match CuKa radiation on a Rigaku Miniflex 600
+#:
+#: - ``pattern_condensed``:
+#:     The compact representation produced by ``condense_pattern_parameters``.
+#:     Contains ``fe_wavelengths``, ``fe_weights``, ``two_theta_range``, and ``step``.
+#:     This is the format consumed directly by ``simPattern``.
+#:
+#: Both dictionaries are guaranteed to stay synchronized. ``pattern_condensed`` is
+#: automatically regenerated from ``pattern_expanded`` at import time.
+#:
+#: Users may import this object to access canonical defaults or to seed custom
+#: parameter dictionaries before modification.
 default_params = {
     "pattern_expanded":{
         "doublet": True,

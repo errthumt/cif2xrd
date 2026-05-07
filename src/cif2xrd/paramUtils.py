@@ -37,7 +37,7 @@ def clean_parameters(params, defaults={}):
     coerced to the default type when possible; otherwise the default value is used.
 
     Boolean defaults accept string values ("true"/"false") and are converted
-    case‑insensitively. Complex types such as lists or tuples are not coerced.
+    case‑insensitively. Complex types such as lists or tuples may not be coerced correctly.
 
     Args:
         params (dict):

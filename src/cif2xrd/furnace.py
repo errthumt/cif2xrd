@@ -11,13 +11,58 @@ DWELL = "dwell"
 
 
 def crop_axes_to_content(ax, l_marg=0, r_marg=0, t_marg=0, b_marg=0, pad=2):
+    """
+    Remove whitespace by shrinking axis limits to tightly wrap
+    all lines, text, and annotations on the Axes.
+    pad is in display (pixel) units.
+    """
+    fig = ax.figure
+    fig.canvas.draw()  # ensure all artists have valid extents
+
+    # Collect all bounding boxes in display coords
+    bboxes = []
+
+    # Lines, markers, etc.
+    for line in ax.lines:
+        bboxes.append(line.get_window_extent())
+
+    # Text objects (labels, annotations, etc.)
+    for txt in ax.texts:
+        bboxes.append(txt.get_window_extent(renderer=fig.canvas.get_renderer()))
+
+    # Collections (e.g., patches, arrows)
+    for coll in ax.collections:
+        try:
+            bboxes.append(coll.get_window_extent(fig.canvas.get_renderer()))
+        except Exception:
+            pass
+
+    # Merge into a single bounding box
+    if not bboxes:
+        return  # nothing to crop
+
+    from matplotlib.transforms import Bbox
+    full = Bbox.union(bboxes)
+
+    # Add padding in display units
+    full = full.expanded((full.width + 2*pad)/full.width,
+                        (full.height + 2*pad)/full.height)
+
+    # Convert display → data coordinates
+    inv = ax.transData.inverted()
+    x0, y0 = inv.transform((full.x0, full.y0))
+    x1, y1 = inv.transform((full.x1, full.y1))
+
+    # Apply new limits
+    ax.set_xlim(x0-l_marg, x1+r_marg)
+    ax.set_ylim(y0-b_marg, y1+t_marg)
 
 class Profile:
     def __init__(self,
-                 start_temp=25, min_height=6, add_temps=[],
-                 ramp_width=4, dwell_width=6, font_size=16,
-                 font_family="Arial", text_offset=0.6, line_width=2,
-                 l_marg=10,r_marg=10,t_marg=10,b_marg=10):
+        start_temp=25, min_height=6, add_temps=[],
+        ramp_width=4, dwell_width=6, font_size=16,
+        font_family="Arial", text_offset=0.6, line_width=2,
+        l_marg=10,r_marg=10,t_marg=10,b_marg=10):
         self.start_temp = start_temp
         self.min_height=min_height
         self.add_temps=add_temps
@@ -56,6 +101,11 @@ class Profile:
 
         # --- Build unique temperature list ---
         unique_temps = self.add_temps.copy()
+
+        for type, temp in self.sections:
+            if temp not in unique_temps:
+                unique_temps.append(temp)
+            unique_temps.sort()
 
         # --- Ensure renderer exists ---
         fig.canvas.draw()

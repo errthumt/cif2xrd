@@ -1,4 +1,5 @@
 __all__ = [
     "paramUtils",
-    "pattern"
+    "pattern",
+    "furnace"
 ]

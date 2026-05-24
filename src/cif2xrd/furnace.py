@@ -379,7 +379,7 @@ class Profile:
         return fig
     '''
 
-    def plot(self):
+    def plot(self, show=False):
         import matplotlib.pyplot as plt
 
         # Create figure if missing OR closed
@@ -397,6 +397,8 @@ class Profile:
         ax.autoscale(False)
 
         self.draw()
+        if show:
+            plt.show()
         return self.fig
 
     
